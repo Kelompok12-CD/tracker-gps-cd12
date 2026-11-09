@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Realtime GPS Tracker & RFID Checkpoint</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+    }
+    #map {
+      height: 100vh;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <script>
+    // 1. Inisialisasi Peta Leaflet (Pusat Purwokerto)
+    const map = L.map('map').setView([-7.406158, 109.260645], 14);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    // 2. Data Rute Langsung dari File GPX Anda
+    const routeCoordinates = [
+      [-7.4061585, 109.2606522],
+      [-7.4061621, 109.2602053],
+      [-7.4069303, 109.2602107],
+      [-7.4076140, 109.2593363],
+      [-7.4102890, 109.2611575],
+      [-7.4128554, 109.2623162],
+      [-7.4130807, 109.2614150],
+      [-7.4133779, 109.2604011],
+      [-7.4143650, 109.2566992],
+      [-7.4150481, 109.2540979],
+      [-7.4101980, 109.2539048],
+      [-7.4071150, 109.2526569],
+      [-7.4050080, 109.2518041],
+      [-7.4044669, 109.2548296],
+      [-7.4037607, 109.2564046],
+      [-7.4075462, 109.2592767],
+      [-7.4069035, 109.2601447],
+      [-7.4058429, 109.2601329],
+      [-7.4058190, 109.2611521],
+      [-7.4061592, 109.2609188],
+      [-7.4061568, 109.2606452]
+    ];
+
+    // Render Garis Rute Biru
+    const polyline = L.polyline(routeCoordinates, {color: '#0066ff', weight: 5, opacity: 0.8}).addTo(map);
+    map.fitBounds(polyline.getBounds());
+
+    // 3. Marker Checkpoint Statis
+    const checkpoints = [
+      { lat: -7.414365, lng: 109.2566992, name: "CHECKPOINT 1" },
+      { lat: -7.407115, lng: 109.2526569, name: "CHECKPOINT 2" },
+      { lat: -7.4061568, lng: 109.2606452, name: "FINISH" }
+    ];
+
+    checkpoints.forEach(cp => {
+      L.marker([cp.lat, cp.lng]).addTo(map).bindPopup(`<b>${cp.name}</b>`);
+    });
+
+    // 4. Marker Pelacak Real-Time ESP32
+    let trackerMarker = L.marker([-7.406158, 109.260645]).addTo(map);
+    trackerMarker.bindPopup("Tracker Siap Memantau...");
+
+    // 5. Fetch ThingSpeak
+    const CHANNEL_ID = "35700051"; // GANTI DENGAN ANGKA CHANNEL ID THINGSPEAK ANDA
+
+    async function fetchRealtimeGPS() {
+      if (!CHANNEL_ID || CHANNEL_ID === "35700051") {
+        // Jika belum diganti ID asli, tidak diproses dulu
+      }
+
+      try {
+        const response = await fetch(`https://api.thingspeak.com/channels/${CHANNEL_ID}/feeds/last.json`);
+        const data = await response.json();
+
+        if (data && data.field1 && data.field2) {
+          const lat = parseFloat(data.field1);
+          const lng = parseFloat(data.field2);
+          const rfidUID = data.field3 || "Tidak ada tap";
+          const newPos = [lat, lng];
+
+          trackerMarker.setLatLng(newPos);
+          trackerMarker.bindPopup(`
+            <b>Status Tracker Hardware</b><br>
+            <b>Lat:</b> ${lat}<br>
+            <b>Lng:</b> ${lng}<br>
+            <b>RFID UID:</b> <span style="color:red; font-weight:bold;">${rfidUID}</span>
+          `).openPopup();
+          
+          map.panTo(newPos);
+        }
+      } catch (error) {
+        console.error("Gagal mengambil data ThingSpeak:", error);
+      }
+    }
+
+    setInterval(fetchRealtimeGPS, 15000);
+    fetchRealtimeGPS();
+  </script>
+</body>
+</html>
